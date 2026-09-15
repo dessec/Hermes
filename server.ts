@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
+import { backendAdapter } from "./server/backendAdapter";
 
 interface Message {
   id: string;
@@ -41,10 +42,14 @@ interface ErrorLog {
   level: "info" | "warn" | "error";
 }
 
-// In-memory data store with file persistence
-const DATA_FILE = path.join(process.cwd(), "openclaw_store.json");
+// In-memory data store with portable file persistence
+const DATA_FILE = process.env.DATA_FILE_PATH || path.join(process.cwd(), "openclaw_store.json");
 
 let masterPassword = process.env.OPENCLAW_PASSWORD || "openclaw2025";
+const workerSecretToken = process.env.WORKER_SECRET_TOKEN || "";
+const defaultModel = process.env.DEFAULT_MODEL || "qwen3:14b-q4_K_M";
+const defaultAgent = process.env.DEFAULT_AGENT || "kaggle-strategist";
+
 let activeSessions: Record<string, { username: string; expiresAt: number }> = {};
 let conversations: Record<string, Conversation> = {};
 let messages: Record<string, Message> = {};
@@ -61,8 +66,8 @@ let recentLogs: ErrorLog[] = [
 // Kaggle Worker state
 let workerState = {
   status: "Agent Online" as "Agent Online" | "Starting" | "Offline" | "Queued" | "Thinking" | "Failed",
-  model: "qwen3:14b-q4_K_M",
-  agent: "kaggle-strategist",
+  model: defaultModel,
+  agent: defaultAgent,
   lastCheckIn: new Date().toISOString(),
   isSimulatedWorker: true, // Enabled by default so user can test immediately before launching Kaggle
 };
@@ -274,6 +279,38 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
+
+  // Portable CORS Middleware - allows frontend to connect from any origin/host/domain
+  app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, X-Worker-Secret");
+    if (req.method === "OPTIONS") {
+      res.sendStatus(200);
+      return;
+    }
+    next();
+  });
+
+  // Health check & Capabilities Info
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  app.get("/api/info", (_req, res) => {
+    res.json({
+      name: "OpenClaw Personal Agent Console",
+      version: "1.0.0",
+      portable: true,
+      provider: backendAdapter.getActiveProvider(),
+      capabilities: backendAdapter.getPublicInfo(),
+      worker: {
+        status: workerState.status,
+        model: workerState.model,
+        agent: workerState.agent,
+      },
+    });
+  });
 
   // Middleware to check authentication token
   const requireAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -503,6 +540,29 @@ async function startServer() {
     conversations[convId].lastMessage = content.trim().slice(0, 60);
 
     persistData();
+
+    // If an external direct provider (Ollama / OpenAI-compatible / Webhook) is configured, trigger it asynchronously
+    backendAdapter.tryDirectInference(content.trim(), workerState.model, workerState.agent)
+      .then((directResult) => {
+        if (directResult) {
+          astMsg.status = "Completed";
+          astMsg.content = directResult.content;
+          astMsg.completedAt = new Date().toISOString();
+          requestQueue = requestQueue.filter((q) => q.id !== taskId);
+          workerState.status = requestQueue.length > 0 ? "Queued" : "Agent Online";
+          recentLogs.unshift({
+            id: `log_${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            message: `Processed task via ${directResult.provider} (${directResult.model})`,
+            level: "info",
+          });
+          if (recentLogs.length > 20) recentLogs.pop();
+          persistData();
+        }
+      })
+      .catch((err) => {
+        console.warn("Direct inference check error, task remains queued for worker:", err);
+      });
 
     res.json({
       userMessage: userMsg,

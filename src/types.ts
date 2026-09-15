@@ -87,4 +87,5 @@ export interface AppSettings {
   sendOnEnter: boolean;
   fontSize: 'compact' | 'default' | 'spacious';
   showStatusPillInHeader: boolean;
+  apiBaseUrl?: string;
 }

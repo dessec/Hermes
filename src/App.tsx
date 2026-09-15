@@ -14,6 +14,13 @@ import { SystemStatusView } from './components/SystemStatusView';
 import { SettingsView } from './components/SettingsView';
 import { ConversationHistoryView } from './components/ConversationHistoryView';
 import { LoginView } from './components/LoginView';
+import {
+  portableFetch,
+  getStoredApiBaseUrl,
+  setStoredApiBaseUrl,
+  getStoredToken,
+  setStoredToken,
+} from './lib/apiClient';
 
 const AUTH_STORAGE_KEY = 'openclaw_token';
 const SETTINGS_STORAGE_KEY = 'openclaw_settings';
@@ -24,10 +31,11 @@ const DEFAULT_SETTINGS: AppSettings = {
   sendOnEnter: true,
   fontSize: 'default',
   showStatusPillInHeader: true,
+  apiBaseUrl: getStoredApiBaseUrl(),
 };
 
 export default function App() {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(AUTH_STORAGE_KEY));
+  const [token, setToken] = useState<string | null>(() => getStoredToken() || localStorage.getItem(AUTH_STORAGE_KEY));
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
 
@@ -50,26 +58,20 @@ export default function App() {
     }
   });
 
-  // Helper for authenticated requests
+  // Helper for authenticated requests via portable client
   const apiFetch = useCallback(
     async (endpoint: string, options: RequestInit = {}) => {
-      const headers = new Headers(options.headers || {});
-      if (token) {
-        headers.set('Authorization', `Bearer ${token}`);
-      }
-      if (!headers.has('Content-Type') && options.body) {
-        headers.set('Content-Type', 'application/json');
-      }
-      const res = await fetch(endpoint, { ...options, headers });
+      const res = await portableFetch(endpoint, options);
       if (res.status === 401) {
         // Token expired or invalid
         setIsAuthenticated(false);
         setToken(null);
+        setStoredToken(null);
         localStorage.removeItem(AUTH_STORAGE_KEY);
       }
       return res;
     },
-    [token]
+    []
   );
 
   // 1. Initial Authentication Check
@@ -88,6 +90,7 @@ export default function App() {
         } else {
           setIsAuthenticated(false);
           setToken(null);
+          setStoredToken(null);
           localStorage.removeItem(AUTH_STORAGE_KEY);
         }
       } catch (err) {
@@ -103,7 +106,7 @@ export default function App() {
   // 2. Fetch Kaggle System Status
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch('/api/status');
+      const res = await portableFetch('/api/status');
       if (res.ok) {
         const data = await res.json();
         setWorkerStatus(data);
@@ -187,19 +190,23 @@ export default function App() {
 
   // Actions
   const handleLogin = async (password: string) => {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
-    });
-    const data = await res.json();
-    if (res.ok && data.token) {
-      setToken(data.token);
-      localStorage.setItem(AUTH_STORAGE_KEY, data.token);
-      setIsAuthenticated(true);
-      return { success: true };
+    try {
+      const res = await portableFetch('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        setToken(data.token);
+        setStoredToken(data.token);
+        localStorage.setItem(AUTH_STORAGE_KEY, data.token);
+        setIsAuthenticated(true);
+        return { success: true };
+      }
+      return { success: false, error: data.error || 'Invalid credentials' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Connection failed' };
     }
-    return { success: false, error: data.error || 'Invalid credentials' };
   };
 
   const handleLogout = async () => {
@@ -209,6 +216,7 @@ export default function App() {
       console.error(e);
     }
     setToken(null);
+    setStoredToken(null);
     localStorage.removeItem(AUTH_STORAGE_KEY);
     setIsAuthenticated(false);
   };
@@ -347,9 +355,13 @@ export default function App() {
   };
 
   const handleUpdateSettings = (newSettings: Partial<AppSettings>) => {
+    if (newSettings.apiBaseUrl !== undefined) {
+      setStoredApiBaseUrl(newSettings.apiBaseUrl);
+    }
     const updated = { ...settings, ...newSettings };
     setSettings(updated);
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(updated));
+    fetchStatus();
   };
 
   const handleChangePassword = async (newPassword: string) => {
