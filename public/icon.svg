@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+    <linearGradient id="claw" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#818cf8" />
+    </linearGradient>
+  </defs>
+  <!-- Background with subtle border -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)" />
+  <rect x="12" y="12" width="488" height="488" rx="100" fill="none" stroke="#334155" stroke-width="4" />
+  
+  <!-- Outer circle ring -->
+  <circle cx="256" cy="256" r="176" fill="none" stroke="#334155" stroke-width="6" stroke-dasharray="16 12" />
+  
+  <!-- OpenClaw Central Emblem -->
+  <g transform="translate(256, 256)">
+    <!-- Central Core -->
+    <circle cx="0" cy="0" r="44" fill="url(#accent)" opacity="0.9" />
+    <circle cx="0" cy="0" r="22" fill="#ffffff" />
+    
+    <!-- Claw Prongs -->
+    <!-- Top left claw -->
+    <path d="M -30,-45 C -75,-120 -40,-165 0,-175 C -15,-130 -40,-95 -25,-45 Z" fill="url(#claw)" />
+    <!-- Top right claw -->
+    <path d="M 30,-45 C 75,-120 40,-165 0,-175 C 15,-130 40,-95 25,-45 Z" fill="url(#claw)" />
+    <!-- Left claw -->
+    <path d="M -50,-10 C -145,-45 -165,10 -170,55 C -130,25 -95,20 -45,15 Z" fill="url(#claw)" />
+    <!-- Right claw -->
+    <path d="M 50,-10 C 145,-45 165,10 170,55 C 130,25 95,20 45,15 Z" fill="url(#claw)" />
+    <!-- Bottom base -->
+    <path d="M -50,60 C -40,130 0,165 0,170 C 0,165 40,130 50,60 C 25,75 -25,75 -50,60 Z" fill="url(#accent)" />
+  </g>
+  
+  <!-- Kaggle/Ready Indicator Dot -->
+  <circle cx="390" cy="122" r="24" fill="#10b981" stroke="#0f172a" stroke-width="6" />
+</svg>

@@ -1,0 +1,6 @@
+{
+  "name": "OpenClaw Agent Console",
+  "description": "Personal OpenClaw agent console and Kaggle worker manager with ChatGPT-style interface, request queue, and status monitoring.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
